@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Bianglala & PLTA Mini - Monitoring</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --card: #1e293b;
+    --line: #334155;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --ok: #10b981;
+    --warn: #f59e0b;
+    --bad: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 14px 40px;
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .dot.bad { background: var(--bad); }
+  .dot.warn { background: var(--warn); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; transition: opacity .3s; }
+  .card h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .val { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .unit { font-size: 14px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+  .note { margin-top: 6px; font-size: 13px; color: var(--muted); word-break: break-all; }
+  .bar { height: 8px; border-radius: 4px; background: var(--line); margin-top: 12px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .4s; }
+  .wide { grid-column: 1 / -1; }
+  canvas { width: 100%; height: 180px; display: block; }
+  .stale .card { opacity: .45; }
+  footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; line-height: 1.6; }
+  .on { color: var(--ok); } .off { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap" id="root">
+  <header>
+    <div>
+      <h1>Bianglala &amp; PLTA Mini</h1>
+      <div class="sub">Monitoring realtime via MQTT publik</div>
+    </div>
+    <div class="badges">
+      <span class="badge"><span class="dot" id="dotMqtt"></span><span id="txtMqtt">MQTT: menghubungkan...</span></span>
+      <span class="badge"><span class="dot" id="dotDev"></span><span id="txtDev">Perangkat: menunggu</span></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h3>Sistem</h3>
+      <div class="val" id="vSys">--</div>
+      <div class="note">Mengikuti posisi saklar</div>
+    </div>
+    <div class="card">
+      <h3>Cahaya (LDR)</h3>
+      <div class="val" id="vNight">--</div>
+      <div class="note">Nilai ADC: <span id="vLdr">--</span></div>
+    </div>
+    <div class="card">
+      <h3>Debit air</h3>
+      <div class="val"><span id="vFlow">--</span><span class="unit">L/min</span></div>
+    </div>
+    <div class="card">
+      <h3>Total air</h3>
+      <div class="val"><span id="vTotal">--</span><span class="unit">L</span></div>
+      <div class="note">Sejak ESP32 menyala</div>
+    </div>
+    <div class="card">
+      <h3>Ayunan servo</h3>
+      <div class="val"><span id="vServo">--</span><span class="unit">&deg;</span></div>
+      <div class="bar"><i id="bServo"></i></div>
+    </div>
+    <div class="card">
+      <h3>Motor bianglala</h3>
+      <div class="val"><span id="vMotor">--</span><span class="unit">/ 255</span></div>
+      <div class="bar"><i id="bMotor"></i></div>
+    </div>
+    <div class="card">
+      <h3>Wi-Fi ESP32</h3>
+      <div class="val"><span id="vRssi">--</span><span class="unit">dBm</span></div>
+      <div class="note" id="vIp">IP: --</div>
+    </div>
+    <div class="card">
+      <h3>Waktu aktif</h3>
+      <div class="val" id="vUp">--</div>
+      <div class="note" id="vLast">Data terakhir: --</div>
+    </div>
+    <div class="card wide">
+      <h3>Debit air (60 detik terakhir)</h3>
+      <canvas id="chart"></canvas>
+    </div>
+  </div>
+
+  <footer>Data dikirim ESP32 tiap 1 detik lewat broker publik. Siapa pun yang tahu topiknya dapat membaca data ini.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+(function () {
+  // ===== KONFIGURASI (samakan MQTT_CODE dengan di file .ino) =====
+  var MQTT_CODE = 'x7k2q9m4';
+  var BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+  var TOPIC_BASE = 'smartcity/bianglala-plta/' + MQTT_CODE;
+  var TOPIC_DATA = TOPIC_BASE + '/data';
+  var TOPIC_STATUS = TOPIC_BASE + '/status';
+  var STALE_MS = 8000;
+  var MAX_POINTS = 60;
+  // ================================================================
+
+  function $(id) { return document.getElementById(id); }
+  var flowHistory = [];
+  var lastLive = 0;
+  var deviceOnline = null; // null = belum tahu
+
+  function setBadge(dotId, txtId, cls, text) {
+    $(dotId).className = 'dot ' + cls;
+    $(txtId).textContent = text;
+  }
+
+  function fmtUptime(s) {
+    s = Math.max(0, Math.floor(s));
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+    return (h ? h + 'j ' : '') + (h || m ? m + 'm ' : '') + r + 'd';
+  }
+
+  function num(v, d) {
+    var n = Number(v);
+    return isFinite(n) ? n.toFixed(d) : '--';
+  }
+
+  function render(d) {
+    var on = Number(d.sys) === 1;
+    var sys = $('vSys');
+    sys.textContent = on ? 'ON' : 'OFF';
+    sys.className = 'val ' + (on ? 'on' : 'off');
+
+    $('vNight').textContent = Number(d.night) === 1 ? 'Malam' : 'Siang';
+    $('vLdr').textContent = num(d.ldr, 0);
+    $('vFlow').textContent = num(d.flow, 1);
+    $('vTotal').textContent = num(d.total, 2);
+    $('vServo').textContent = num(d.servo, 0);
+    $('vMotor').textContent = num(d.motor, 0);
+    $('vRssi').textContent = num(d.rssi, 0);
+    $('vIp').textContent = 'IP: ' + String(d.ip == null ? '--' : d.ip);
+    $('vUp').textContent = fmtUptime(Number(d.up));
+
+    var servoPct = ((Number(d.servo) - 15) / (105 - 15)) * 100;
+    $('bServo').style.width = Math.min(100, Math.max(0, servoPct)) + '%';
+    $('bMotor').style.width = Math.min(100, Math.max(0, (Number(d.motor) / 255) * 100)) + '%';
+  }
+
+  // ----- Grafik debit -----
+  var canvas = $('chart');
+  function drawChart() {
+    var dpr = window.devicePixelRatio || 1;
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    var c = canvas.getContext('2d');
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, w, h);
+
+    var padL = 34, padB = 18, padT = 8, padR = 8;
+    var pw = w - padL - padR, ph = h - padT - padB;
+    var maxV = Math.max(5, Math.ceil(Math.max.apply(null, flowHistory.concat([0])) * 1.2));
+
+    c.strokeStyle = '#334155'; c.fillStyle = '#94a3b8'; c.lineWidth = 1; c.font = '11px sans-serif';
+    for (var i = 0; i <= 4; i++) {
+      var y = padT + ph - (ph * i / 4);
+      c.beginPath(); c.moveTo(padL, y); c.lineTo(w - padR, y); c.stroke();
+      c.fillText((maxV * i / 4).toFixed(0), 4, y + 4);
+    }
+    if (flowHistory.length < 2) return;
+
+    c.beginPath();
+    flowHistory.forEach(function (v, idx) {
+      var x = padL + pw * (idx / (MAX_POINTS - 1)) + pw * ((MAX_POINTS - flowHistory.length) / (MAX_POINTS - 1)) * 0;
+      x = padL + pw - pw * ((flowHistory.length - 1 - idx) / (MAX_POINTS - 1));
+      var y = padT + ph - (v / maxV) * ph;
+      if (idx === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    });
+    c.strokeStyle = '#38bdf8'; c.lineWidth = 2; c.stroke();
+  }
+  window.addEventListener('resize', drawChart);
+
+  // ----- Deteksi data basi -----
+  setInterval(function () {
+    var live = lastLive && (Date.now() - lastLive) < STALE_MS;
+    $('root').classList.toggle('stale', !live);
+    if (deviceOnline === false) {
+      setBadge('dotDev', 'txtDev', 'bad', 'Perangkat: offline');
+    } else if (live) {
+      setBadge('dotDev', 'txtDev', 'ok', 'Perangkat: online');
+    } else if (lastLive) {
+      setBadge('dotDev', 'txtDev', 'warn', 'Perangkat: tidak ada data');
+    }
+    if (lastLive) {
+      $('vLast').textContent = 'Data terakhir: ' + new Date(lastLive).toLocaleTimeString('id-ID');
+    }
+  }, 1000);
+
+  // ----- MQTT -----
+  var client = mqtt.connect(BROKER_URL, {
+    clientId: 'web-bianglala-' + Math.random().toString(16).slice(2, 10),
+    reconnectPeriod: 3000,
+    connectTimeout: 8000,
+    clean: true
+  });
+
+  client.on('connect', function () {
+    setBadge('dotMqtt', 'txtMqtt', 'ok', 'MQTT: terhubung');
+    client.subscribe([TOPIC_DATA, TOPIC_STATUS]);
+  });
+  client.on('reconnect', function () { setBadge('dotMqtt', 'txtMqtt', 'warn', 'MQTT: menyambung ulang...'); });
+  client.on('close', function () { setBadge('dotMqtt', 'txtMqtt', 'bad', 'MQTT: terputus'); });
+  client.on('error', function () { setBadge('dotMqtt', 'txtMqtt', 'bad', 'MQTT: error'); });
+
+  client.on('message', function (topic, payload, packet) {
+    var text = payload.toString();
+
+    if (topic === TOPIC_STATUS) {
+      deviceOnline = (text === 'online');
+      if (!deviceOnline) setBadge('dotDev', 'txtDev', 'bad', 'Perangkat: offline');
+      return;
+    }
+
+    if (topic === TOPIC_DATA) {
+      var d;
+      try { d = JSON.parse(text); } catch (e) { return; }
+      render(d);
+      // Pesan retained = data terakhir lama, bukan bukti perangkat sedang hidup
+      if (!packet.retain) {
+        lastLive = Date.now();
+        flowHistory.push(Number(d.flow) || 0);
+        if (flowHistory.length > MAX_POINTS) flowHistory.shift();
+        drawChart();
+      }
+    }
+  });
+
+  drawChart();
+})();
+</script>
+</body>
+</html>
