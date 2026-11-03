@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitoring Jembatan Otomatis</title>
+<style>
+  :root { --bg:#eef2f6; --card:#fff; --ink:#142030; --muted:#5a6b7c; --line:#d3dce5;
+          --water:#2d7fb8; --deck:#44566a; --pier:#7d8c9b; --off:#c5ced7;
+          --ok:#1f9a5b; --warn:#d9a000; --bad:#d33a3a; --idle:#7d8c9b; --night:#1a2440; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b1118; --card:#141d27; --ink:#e4edf5; --muted:#8fa2b4; --line:#26343f;
+            --water:#245f8a; --deck:#8ea2b8; --pier:#5b6b7a; --off:#2c3946;
+            --ok:#3ec27a; --warn:#e8b13a; --bad:#ee5c5c; --idle:#6a7a89; --night:#0e1630; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:22px 16px 48px; }
+  header { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; }
+  h1 { font-size:1.35rem; margin:0; }
+  .conn { font-size:.85rem; color:var(--muted); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--idle); margin-right:6px; }
+  .dot.on { background:var(--ok); }
+  .scene { margin:16px 0 12px; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:8px; }
+  .scene svg { width:100%; height:auto; display:block; }
+  .sky { fill:#cfe6f5; transition:fill .6s; } .scene.malam .sky { fill:var(--night); }
+  .water { fill:var(--water); } .pier { fill:var(--pier); } .deck { stroke:var(--deck); stroke-width:10; stroke-linecap:round; }
+  .half { transition:transform 1.4s ease-in-out; transform-box:view-box; }
+  #kiri { transform-origin:50px 108px; } #kanan { transform-origin:350px 108px; }
+  .terbuka #kiri { transform:rotate(-38deg); } .terbuka #kanan { transform:rotate(38deg); }
+  @media (prefers-reduced-motion: reduce) { .half { transition:none; } }
+  .lamp { fill:var(--off); transition:fill .3s; } .scene.malam .lamp { fill:#ffe38a; }
+  .lr, .ly, .lg { fill:var(--off); transition:fill .2s; }
+  .scene[data-lampu="R"] .lr { fill:var(--bad); } .scene[data-lampu="Y"] .ly { fill:var(--warn); }
+  .scene[data-lampu="G"] .lg { fill:var(--ok); }
+  .status { border-radius:14px; padding:18px 22px; color:#fff; background:var(--idle); margin-bottom:12px; }
+  .status.SIAGA { background:var(--ok); } .status.KUNING { background:var(--warn); color:#1c1400; }
+  .status.TERBUKA, .status.MENUTUP { background:var(--bad); }
+  .status b { display:block; font-size:1.8rem; line-height:1.15; }
+  .status span { font-size:.92rem; opacity:.92; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .card small { color:var(--muted); }
+  .v { font-size:1.9rem; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.25; }
+  .v i { font-style:normal; font-size:1rem; font-weight:400; color:var(--muted); margin-left:4px; }
+  .v.hit { color:var(--bad); }
+  .sub { color:var(--muted); font-size:.88rem; }
+  .foot { margin-top:14px; font-size:.85rem; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Jembatan Otomatis</h1>
+    <div class="conn"><span class="dot" id="dot"></span><span id="conn">Menyambung...</span></div>
+  </header>
+
+  <div class="scene" id="scene" data-lampu="">
+    <svg viewBox="0 0 400 170" role="img" aria-label="Ilustrasi jembatan dan lampu lalu lintas">
+      <rect class="sky" width="400" height="170"/>
+      <rect class="water" y="128" width="400" height="42"/>
+      <rect class="pier" x="40" y="108" width="20" height="40"/><rect class="pier" x="340" y="108" width="20" height="40"/>
+      <g class="half" id="kiri"><line class="deck" x1="50" y1="108" x2="196" y2="108"/></g>
+      <g class="half" id="kanan"><line class="deck" x1="350" y1="108" x2="204" y2="108"/></g>
+      <g>
+        <line x1="20" y1="104" x2="20" y2="52" stroke="var(--pier)" stroke-width="3"/><circle class="lamp" cx="20" cy="48" r="5"/>
+        <line x1="380" y1="104" x2="380" y2="52" stroke="var(--pier)" stroke-width="3"/><circle class="lamp" cx="380" cy="48" r="5"/>
+      </g>
+      <g>
+        <rect x="64" y="52" width="16" height="42" rx="4" fill="#222"/>
+        <circle class="lr" cx="72" cy="60" r="4.5"/><circle class="ly" cx="72" cy="73" r="4.5"/><circle class="lg" cx="72" cy="86" r="4.5"/>
+        <rect x="320" y="52" width="16" height="42" rx="4" fill="#222"/>
+        <circle class="lr" cx="328" cy="60" r="4.5"/><circle class="ly" cx="328" cy="73" r="4.5"/><circle class="lg" cx="328" cy="86" r="4.5"/>
+      </g>
+    </svg>
+  </div>
+
+  <div class="status" id="status"><b id="stText">Menunggu data</b><span id="stSub">Menunggu kiriman dari alat...</span></div>
+
+  <div class="grid">
+    <div class="card"><small>Sensor kapal arah 1</small><div class="v" id="v1">--</div><div class="sub">Kapal terdeteksi jika &lt; 4 cm</div></div>
+    <div class="card"><small>Sensor kapal arah 2</small><div class="v" id="v2">--</div><div class="sub">Kapal terdeteksi jika &lt; 4 cm</div></div>
+    <div class="card"><small>Kapal terdeteksi</small><div class="v" id="kapal">--</div><div class="sub">Sejak alat dinyalakan</div></div>
+    <div class="card"><small>Lampu penerangan jalan</small><div class="v" id="lampu">--</div><div class="sub" id="ldr">Sensor cahaya</div></div>
+    <div class="card"><small>Sensor kapal</small><div class="v" id="saklar">--</div><div class="sub" id="dev">Alat: belum ada kabar</div></div>
+  </div>
+  <div class="foot" id="last">Pembaruan terakhir: -</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+  // Kode unik tetap, harus sama persis dengan KODE_UNIK di jembatan_otomatis.ino
+  const KODE   = "BR-5d1f8a";
+  const BROKER = "wss://broker.emqx.io:8084/mqtt";   // wss:// wajib karena halaman memakai HTTPS
+  const $ = (id) => document.getElementById(id);
+
+  const INFO = {
+    SIAGA:    ["SIAGA", "Jembatan tertutup, lalu lintas lancar", "G"],
+    KUNING:   ["KAPAL TERDETEKSI", "Lampu kuning, jembatan bersiap membuka", "Y"],
+    TERBUKA:  ["JEMBATAN TERBUKA", "Lampu merah, kapal sedang melintas", "R"],
+    MENUTUP:  ["JEMBATAN MENUTUP", "Lampu merah, jembatan kembali menutup", "R"],
+    NONAKTIF: ["SENSOR NONAKTIF", "Saklar sensor dimatikan, jembatan tetap tertutup", "G"]
+  };
+
+  function jarak(el, v) {
+    const n = Number(v);
+    const ada = Number.isFinite(n) && n < 400;
+    el.innerHTML = ada ? n + "<i>cm</i>" : "--";
+    el.classList.toggle("hit", ada && n < 4);
+  }
+
+  function tampil(d) {
+    const f = INFO[d.fase] || ["TIDAK DIKENAL", "", ""];
+    $("status").className = "status " + (INFO[d.fase] ? d.fase : "");
+    $("stText").textContent = f[0];
+    $("stSub").textContent = f[1];
+    const sc = $("scene");
+    sc.dataset.lampu = f[2];
+    sc.classList.toggle("terbuka", d.fase === "TERBUKA");
+    sc.classList.toggle("malam", !!d.malam);
+    jarak($("v1"), d.j1); jarak($("v2"), d.j2);
+    $("kapal").textContent = d.kapal;
+    $("lampu").textContent = d.malam ? "MENYALA" : "MATI";
+    $("ldr").textContent = d.malam ? "Gelap terdeteksi (malam)" : "Terang terdeteksi (siang)";
+    $("saklar").textContent = d.saklar ? "AKTIF" : "MATI";
+    $("last").textContent = "Pembaruan terakhir: " + new Date().toLocaleTimeString("id-ID");
+  }
+
+  function setConn(ok, t) { $("dot").classList.toggle("on", ok); $("conn").textContent = t; }
+
+  const client = mqtt.connect(BROKER, {
+    clientId: "web-" + Math.random().toString(16).slice(2, 10),
+    reconnectPeriod: 3000, connectTimeout: 10000
+  });
+  client.on("connect", () => { setConn(true, "Tersambung"); client.subscribe("jembatan/" + KODE + "/#"); });
+  client.on("reconnect", () => setConn(false, "Menyambung ulang..."));
+  client.on("offline", () => setConn(false, "Terputus"));
+  client.on("message", (topic, payload) => {
+    const jenis = topic.split("/").pop(), teks = payload.toString();
+    if (jenis === "online") { $("dev").textContent = "Alat: " + (teks === "online" ? "online" : "offline"); return; }
+    if (jenis === "data") { try { tampil(JSON.parse(teks)); } catch (e) {} }
+  });
+</script>
+</body>
+</html>
